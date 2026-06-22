@@ -1,0 +1,25 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+"permissions": [
+    "core:default",
+    "sql:default",
+    "shell:allow-open",
+    "shell:default",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "sql:allow-load",
+    "core:window:allow-start-dragging",
+    "core:window:allow-close",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-minimize",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://pncp.gov.br/**" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,285 @@
+@import "tailwindcss";
+
+/* ============================================================
+   SISTEMA DE TEMAS — variáveis CSS
+   .dark  → Navy (padrão)
+   .light → Branco
+   ============================================================ */
+
+:root, .dark {
+  --c-bg:          #111827;
+  --c-surface:     #0c1020;
+  --c-card:        #1a2235;
+  --c-card-hover:  #1f2940;
+  --c-elevated:    #0f1829;
+  --c-border:      #1e2a3e;
+  --c-border-md:   #243047;
+  --c-border-sub:  #172030;
+
+  --c-text-1:      #e2e8f0;
+  --c-text-2:      #64748b;
+  --c-text-3:      #334155;
+
+  --c-input-bg:    #0a1020;
+  --c-input-text:  #e2e8f0;
+
+  --c-overlay:     rgba(7, 10, 20, 0.88);
+
+  color-scheme: dark;
+}
+
+.light {
+  --c-bg:          #f8fafc;
+  --c-surface:     #ffffff;
+  --c-card:        #ffffff;
+  --c-card-hover:  #f1f5f9;
+  --c-elevated:    #ffffff;
+  --c-border:      #e2e8f0;
+  --c-border-md:   #cbd5e1;
+  --c-border-sub:  #f1f5f9;
+
+  --c-text-1:      #0f172a;
+  --c-text-2:      #475569;
+  --c-text-3:      #94a3b8;
+
+  --c-input-bg:    #f8fafc;
+  --c-input-text:  #0f172a;
+
+  --c-overlay:     rgba(15, 23, 42, 0.6);
+
+  color-scheme: light;
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+* { box-sizing: border-box; }
+
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+body, #root {
+  margin: 0;
+  background-color: var(--c-bg);
+  color: var(--c-text-1);
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+a { font-weight: 500; color: #dc2626; text-decoration: inherit; }
+a:hover { color: #ef4444; }
+
+/* ============================================================
+   OVERRIDES LIGHT MODE — classes Tailwind que precisam inverter
+   ============================================================ */
+
+/* Textos */
+.light .text-zinc-100,
+.light .text-zinc-200  { color: #0f172a !important; }
+.light .text-zinc-300  { color: #1e293b !important; }
+.light .text-zinc-400  { color: #334155 !important; }
+.light .text-zinc-500  { color: #475569 !important; }
+.light .text-zinc-600  { color: #64748b !important; }
+.light .text-zinc-700  { color: #94a3b8 !important; }
+
+/* Fundos */
+.light .bg-black        { background-color: #f8fafc !important; }
+.light .bg-black\/50    { background-color: rgba(248,250,252,0.8) !important; }
+.light .bg-black\/30    { background-color: rgba(241,245,249,0.6) !important; }
+.light .bg-zinc-900     { background-color: #f1f5f9 !important; }
+.light .bg-zinc-900\/50 { background-color: rgba(241,245,249,0.5) !important; }
+.light .bg-zinc-800     { background-color: #e2e8f0 !important; }
+
+/* Bordas */
+.light .border-zinc-900  { border-color: #f1f5f9 !important; }
+.light .border-zinc-800  { border-color: #e2e8f0 !important; }
+.light .border-zinc-700  { border-color: #cbd5e1 !important; }
+
+/* Placeholder */
+.light input::placeholder,
+.light textarea::placeholder { color: #94a3b8 !important; }
+
+/* Hover de linhas de tabela */
+.light tbody tr:hover {
+  background-color: rgba(220, 38, 38, 0.04) !important;
+}
+
+/* Overlay de modais */
+.light .overlay-glass {
+  background: rgba(15, 23, 42, 0.55) !important;
+}
+
+/* Backgrounds customizados hardcoded no Dashboard / Vault / modais */
+.light [class*="bg-[#090a0f]"],
+.light [class*="bg-[#0c0d12]"],
+.light [class*="bg-[#0c1020]"]  { background-color: #f1f5f9 !important; }
+.light [class*="bg-[#12141d]"]  { background-color: #ffffff !important; }
+.light [class*="bg-[#111827]"]  { background-color: #f8fafc !important; }
+
+/* bg-black no modo light vira superfície limpa */
+.light .bg-black { background-color: #ffffff !important; }
+.light [class*="bg-black\/50"] { background-color: rgba(248,250,252,0.85) !important; }
+.light [class*="bg-black\/30"] { background-color: rgba(241,245,249,0.6) !important; }
+
+/* Skeleton */
+.light .skeleton-loading { animation: skeletonPulseLight 1.5s infinite ease-in-out; }
+@keyframes skeletonPulseLight {
+  0%, 100% { opacity: 0.6; background-color: #e2e8f0; }
+  50%       { opacity: 1;   background-color: #f1f5f9; }
+}
+
+/* ============================================================
+   IMPRESSÃO — FALLBACK (o PDF usa window.open com janela isolada)
+   Este bloco só age se alguém chamar window.print() diretamente.
+   ============================================================ */
+@media print {
+  @page { size: A4 portrait; margin: 14mm 17mm; }
+  aside, nav, .no-print, [data-tauri-drag-region] { display: none !important; }
+}
+
+/* ============================================================
+   ANIMAÇÕES / TRANSIÇÕES
+   ============================================================ */
+@keyframes fadeInSlide {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.aba-animada { animation: fadeInSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+.overlay-glass {
+  background: var(--c-overlay) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+/* Cards */
+.card-premium {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: all 0.2s ease-out;
+}
+.card-premium:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25), 0 0 0 1px rgba(220,38,38,0.2);
+}
+.light .card-premium {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.light .card-premium:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1), 0 0 0 1px rgba(220,38,38,0.15);
+}
+
+/* Tabelas */
+tbody tr { transition: background 0.15s ease-out !important; }
+tbody tr:hover {
+  background-color: rgba(220, 38, 38, 0.05) !important;
+  border-left: 2px solid #dc2626;
+  position: relative;
+}
+
+button { transition: all 0.15s ease-out !important; }
+button:active { transform: scale(0.97) !important; }
+
+/* Inputs */
+input, textarea {
+  transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out !important;
+}
+input:focus, textarea:focus {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15) !important;
+  outline: none !important;
+}
+
+.skeleton-loading { animation: skeletonPulse 1.5s infinite ease-in-out; }
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.6; background-color: #1e2a3e; }
+  50%       { opacity: 1;   background-color: #243047; }
+}
+
+/* ============================================================
+   BACKGROUNDS ANIMADOS (Boot / Sidebar)
+   ============================================================ */
+.fundo-estrelas {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(ellipse at bottom, #1a0505 0%, #111827 100%);
+  overflow: hidden; z-index: 0;
+}
+.light .fundo-estrelas {
+  background: radial-gradient(ellipse at bottom, #fff5f5 0%, #f8fafc 100%);
+}
+
+.fundo-listras {
+  background-image: linear-gradient(
+    135deg, rgba(220,38,38,0.15) 25%, transparent 25%, transparent 50%,
+    rgba(220,38,38,0.15) 50%, rgba(220,38,38,0.15) 75%, transparent 75%, transparent
+  );
+  background-size: 40px 40px;
+  animation: moverListras 10s linear infinite;
+}
+@keyframes moverListras { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } }
+
+#stars, #stars:after { width: 1px; height: 1px; background: transparent; box-shadow: 501px 811px #dc2626, 1450px 1324px #fff, 1093px 1780px #dc2626, 1469px 678px #fff, 904px 741px #fff, 1160px 781px #dc2626, 1841px 1962px #fff, 1630px 1667px #dc2626, 1788px 676px #fff, 367px 1734px #fff, 1343px 156px #dc2626, 1283px 1142px #fff, 1062px 378px #fff, 1395px 467px #dc2626, 1017px 1891px #fff; animation: animStar 50s linear infinite; }
+#stars2, #stars2:after { width: 2px; height: 2px; background: transparent; box-shadow: 1925px 1320px #dc2626, 693px 1778px #fff, 1016px 711px #dc2626, 1171px 563px #fff, 661px 1919px #dc2626, 1610px 44px #fff, 1275px 140px #fff, 1208px 1802px #dc2626, 1473px 1587px #fff, 11px 1117px #fff; animation: animStar 100s linear infinite; }
+#stars3, #stars3:after { width: 3px; height: 3px; background: transparent; box-shadow: 200px 981px #dc2626, 1731px 521px #fff, 132px 1039px #dc2626, 1888px 1547px #fff, 899px 1226px #dc2626, 1887px 580px #fff, 1548px 1092px #fff, 1626px 689px #dc2626, 254px 1072px #fff, 1684px 1211px #dc2626; animation: animStar 150s linear infinite; }
+@keyframes animStar { from { transform: translateY(0px); } to { transform: translateY(-2000px); } }
+
+/* ============================================================
+   BOOT SEQUENCE (sempre dark — independe do tema)
+   ============================================================ */
+.outline {
+  stroke: #dc2626; stroke-width: 2; fill: transparent;
+  stroke-dasharray: 400; stroke-dashoffset: 400;
+  animation: draw-svg 2.5s cubic-bezier(0.25, 1, 0.5, 1) forwards, logo-flicker 4s infinite 3s;
+}
+.solid rect, .solid polygon {
+  stroke: #dc2626; stroke-width: 2; fill: transparent;
+  stroke-dasharray: 200; stroke-dashoffset: 200;
+  animation: draw-svg 2s cubic-bezier(0.25, 1, 0.5, 1) forwards, fill-svg 0.5s ease-in 2s forwards, logo-flicker 4s infinite 3s;
+}
+@keyframes draw-svg  { 100% { stroke-dashoffset: 0; } }
+@keyframes fill-svg  { 100% { fill: #dc2626; stroke-width: 0; } }
+@keyframes logo-flicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { filter: drop-shadow(0 0 15px rgba(220,38,38,0.8)); opacity: 1; }
+  20%, 22%, 24%, 55% { filter: drop-shadow(0 0 5px rgba(220,38,38,0.3)); opacity: 0.7; }
+}
+
+.scanline {
+  position: absolute; top: -10%; left: 0; width: 100%; height: 20px;
+  background: linear-gradient(to bottom, transparent, rgba(220,38,38,0.2), transparent);
+  opacity: 0.5; animation: scan 4s linear infinite; pointer-events: none; z-index: 50;
+}
+@keyframes scan { 0% { top: -10%; } 100% { top: 110%; } }
+
+.hero-fly {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(1);
+  display: flex; flex-direction: column; align-items: center;
+  animation: flyToCorner 1.2s cubic-bezier(0.76, 0, 0.24, 1) 6s forwards;
+  z-index: 210;
+}
+@keyframes flyToCorner {
+  0%   { top: 50%; left: 50%; transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 56px; left: 74px; transform: translate(-50%, -50%) scale(0.25); opacity: 0; }
+}
+
+.boot-bg     { animation: fadeOutBg 1.5s ease-out 6.5s forwards; }
+.terminal-fade { animation: fadeOutBg 0.5s ease-out 5.5s forwards; }
+@keyframes fadeOutBg { 0% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+
+@keyframes fadeInBoot { from { opacity: 0; } to { opacity: 1; } }
+.fade-in-boot { animation: fadeInBoot 0.6s ease-out forwards; }
+
+/* ============================================================
+   SCROLLBAR CUSTOMIZADA
+   ============================================================ */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--c-border-md); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #dc2626; }
