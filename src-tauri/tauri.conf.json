@@ -42,7 +42,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMzMkRGRjY5NDRGMzk3RTQKUldUa2wvTkVhZjh0dzFoUSt3T056bTg3TkE1bVhibkUzcjltSFRyVkN0RUIrTWMwWWhmZytQMjcK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcyOUQxMEVDQkE3QUJFNzEKUldSeHZucTY3QkNkY2l2R292L3NTbzY1T3cxaS9wa2dUdkh0cVhnZUQ1UVNrUC96KzVOTC9yQ0kK",
       "endpoints": [
         "https://github.com/lokibjork/monolith/releases/latest/download/latest.json"
       ]
