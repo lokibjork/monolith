@@ -1,4 +1,4 @@
-use tauri::Manager;
+use tauri::Emitter;
 use tauri_plugin_updater::UpdaterExt;
 
 #[tauri::command]
