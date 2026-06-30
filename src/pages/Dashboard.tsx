@@ -1372,7 +1372,6 @@ export default function Dashboard() {
                             const ideal = temConcorrente ? concorrente - 0.01 : null;
                             const isPrejuizo = temConcorrente && concorrente < meuMinimo;
                             const isLimite = temConcorrente && ideal !== null && ideal <= meuMinimo && !isPrejuizo;
-                            const isVantagem = temConcorrente && !isPrejuizo && !isLimite;
 
                             return (
                               <div key={item.id} className={`grid grid-cols-[1fr_120px_120px_140px_120px] border-b border-zinc-800/50 transition-colors ${isPrejuizo ? 'bg-red-950/20' : ''}`}>
