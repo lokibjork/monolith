@@ -38,10 +38,15 @@ function calcularTempoRestante(dataStr: string) {
     if (!partes) return { txt: dataStr, cor: 'text-zinc-500 border-zinc-700 bg-zinc-900/50' };
     const dataSessao = new Date(Number(partes[3]), Number(partes[2]) - 1, Number(partes[1]), Number(partes[4]), Number(partes[5]));
     const agora = new Date(); const diff = dataSessao.getTime() - agora.getTime();
-    if (diff <= 0) return { txt: 'ENCERRADO', cor: 'text-zinc-500 border-zinc-800 bg-zinc-950 font-bold' };
-    const dias = Math.floor(diff / (1000 * 60 * 60 * 24)); const horas = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)); const minutos = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (dias > 0) return { txt: `${dias}d ${horas}h`, cor: 'text-red-400 border-red-900/50 bg-red-950/30' };
-    if (horas > 0) return { txt: `T-${horas}h ${minutos}m`, cor: 'text-red-500 border-red-500 bg-red-950/80 font-bold animate-pulse' };
+    if (diff <= 0) return { txt: 'ENCERRADO', cor: 'text-zinc-600 border-zinc-800 bg-zinc-950 font-bold' };
+    const dias = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const horas = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutos = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (dias >= 14) return { txt: `${dias}d ${horas}h`, cor: 'text-zinc-400 border-zinc-700 bg-zinc-900/50' };
+    if (dias >= 7)  return { txt: `${dias}d ${horas}h`, cor: 'text-zinc-300 border-zinc-600 bg-zinc-800/60' };
+    if (dias >= 3)  return { txt: `${dias}d ${horas}h`, cor: 'text-amber-400 border-amber-800/60 bg-amber-950/30' };
+    if (dias >= 1)  return { txt: `${dias}d ${horas}h`, cor: 'text-red-400 border-red-900/50 bg-red-950/30 font-bold' };
+    if (horas > 0)  return { txt: `T-${horas}h ${minutos}m`, cor: 'text-red-400 border-red-500 bg-red-950/80 font-bold animate-pulse' };
     return { txt: `CRÍTICO: ${minutos}m`, cor: 'text-red-50 bg-red-600 border-red-400 font-bold animate-pulse' };
   } catch (e) { return { txt: dataStr, cor: 'text-zinc-600 border-zinc-700' }; }
 }
@@ -102,6 +107,17 @@ export default function Dashboard() {
   type Participante = { user_id: string; user_nome: string; user_cor: string; user_avatar_url?: string | null };
   const [participantesMap, setParticipantesMap] = useState<Record<number, Participante[]>>({});
 
+  // Observações por edital
+  const [obsTexto, setObsTexto] = useState('');
+  const [obsTags, setObsTags] = useState<string[]>([]);
+  const [obsSalvando, setObsSalvando] = useState(false);
+
+  // Sala de Guerra — disputa ao vivo
+  type LogLance = { itemNome: string; concorrente: number; ideal: number | null; status: 'vantagem' | 'limite' | 'prejuizo'; ts: string };
+  const [lanceConcorrente, setLanceConcorrente] = useState<Record<number, string>>({});
+  const [historicoLances, setHistoricoLances] = useState<LogLance[]>([]);
+  const [sessaoInicio] = useState<Date>(new Date());
+
   // Onboarding (Task #6)
   const [mostrarOnboarding, setMostrarOnboarding] = useState(false);
 
@@ -135,6 +151,14 @@ export default function Dashboard() {
     }
   }, [editalAtivo, abaAtiva]);
 
+  // Carrega observações quando o edital ativo muda
+  useEffect(() => {
+    if (editalAtivo) {
+      setObsTexto(editalAtivo.observacoes || '');
+      setObsTags(editalAtivo.tags || []);
+    }
+  }, [editalAtivo?.id]);
+
   // Realtime: itens do edital ativo (bloqueio de cotação)
   useEffect(() => {
     if (!editalAtivo) return;
@@ -145,7 +169,31 @@ export default function Dashboard() {
         filter: `edital_id=eq.${editalAtivo.id}`,
       }, (payload) => {
         const updated = payload.new as any;
+        // Atualiza lista de itens do edital ativo
         setItens(prev => prev.map(i => i.id === updated.id ? { ...i, ...updated } : i));
+        // Atualiza barra de progresso em tempo real
+        setProgressoMap(prev => {
+          const editalId = updated.edital_id;
+          if (!prev[editalId]) return prev;
+          const entrada = prev[editalId];
+          // Detecta se o item mudou de estado (cotado <-> pendente)
+          const novoTotal = entrada.total;
+          let novoCotados = entrada.cotados;
+          // Só ajusta se o item não está ignorado
+          if (updated.ignorado !== 1) {
+            // Recarrega o progresso do servidor de forma leve
+            supabase.from('itens').select('melhor_cotacao, ignorado').eq('edital_id', editalId).then(({ data }) => {
+              if (data) {
+                const ativos = data.filter(i => i.ignorado !== 1);
+                setProgressoMap(p => ({
+                  ...p,
+                  [editalId]: { total: ativos.length, cotados: ativos.filter(i => i.melhor_cotacao > 0).length }
+                }));
+              }
+            });
+          }
+          return { ...prev, [editalId]: { total: novoTotal, cotados: novoCotados } };
+        });
         if (updated.locked_by_id && updated.locked_by_id !== perfil?.id) {
           setItensLocked(prev => ({ ...prev, [updated.id]: { nome: updated.locked_by_nome, cor: updated.locked_by_cor || '#dc2626' } }));
         } else {
@@ -475,6 +523,26 @@ export default function Dashboard() {
   }
 
   // ==========================================
+  // OBSERVAÇÕES
+  // ==========================================
+  const TAGS_DISPONIVEIS = ['AMOSTRA', 'PRAZO CURTO', 'PARCELADO', 'EXCLUSIVO ME/EPP', 'VISITA TÉCNICA', 'FRETE INCLUSO', 'ATENÇÃO'];
+
+  function toggleTag(tag: string) {
+    playClick();
+    setObsTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+  }
+
+  async function handleSalvarObs() {
+    if (!editalAtivo) return;
+    setObsSalvando(true);
+    await supabase.from('editais').update({ observacoes: obsTexto, tags: obsTags }).eq('id', editalAtivo.id);
+    setEditais(prev => prev.map(e => e.id === editalAtivo.id ? { ...e, observacoes: obsTexto, tags: obsTags } : e));
+    setEditalAtivo((prev: any) => ({ ...prev, observacoes: obsTexto, tags: obsTags }));
+    setObsSalvando(false);
+    playSuccess();
+  }
+
+  // ==========================================
   // REGISTRAR VITÓRIA (sem XP)
   // ==========================================
   async function handleRegistrarVitoria(e: React.FormEvent) {
@@ -654,7 +722,7 @@ export default function Dashboard() {
         idEdital = existe[0].id;
       } else {
         const { data: insertData, error: errEdital } = await supabase.from('editais').insert({
-          numero, orgao, data_pregao: dataPregao, uasg: cnpj, link_oficial: linkOficialGerado
+          numero, orgao, data_pregao: dataPregao, uasg: cnpj, link_oficial: linkOficialGerado, manual: true
         }).select();
         if (errEdital) throw errEdital;
         idEdital = insertData[0].id;
@@ -687,8 +755,11 @@ export default function Dashboard() {
   // FILTROS E CÁLCULOS
   // ==========================================
   const editaisFiltrados = editais.filter(e => {
-    const passaBusca = e.orgao?.toLowerCase().includes(busca.toLowerCase()) ||
-                       e.numero?.toLowerCase().includes(busca.toLowerCase());
+    const termo = busca.toLowerCase();
+    const passaBusca = !busca ||
+      e.orgao?.toLowerCase().includes(termo) ||
+      e.numero?.toLowerCase().includes(termo) ||
+      e.objeto?.toLowerCase().includes(termo);
     const passaFiltro = filtroStatus === 'todos' || participantesMap[e.id]?.some(p => p.user_id === perfil?.id);
     return passaBusca && passaFiltro;
   });
@@ -798,11 +869,17 @@ export default function Dashboard() {
 
               <div className="flex items-center gap-3">
                 <div className="relative flex-1 max-w-sm">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 pointer-events-none" />
                   <input
                     type="text" value={busca} onChange={e => setBusca(e.target.value)}
-                    placeholder="Buscar por órgão ou número..."
-                    className="w-full pl-4 pr-4 py-2 bg-black border border-zinc-800 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-red-600 transition-all"
+                    placeholder="Órgão, número ou palavra-chave..."
+                    className="w-full pl-9 pr-4 py-2 bg-black border border-zinc-800 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-red-600 transition-all"
                   />
+                  {busca && (
+                    <button onClick={() => setBusca('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors">
+                      <X size={12} />
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   {(['todos', 'participando'] as const).map(f => (
@@ -820,8 +897,9 @@ export default function Dashboard() {
                 <p className="text-zinc-600 text-sm">Nenhum edital encontrado. Use o Sync PNCP ou o Extrator Manual.</p>
               </div>
             ) : editaisFiltrados.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 border border-dashed border-zinc-800">
-                <p className="text-zinc-600 text-sm">Nenhum edital corresponde à busca.</p>
+              <div className="flex flex-col items-center justify-center h-48 border border-dashed border-zinc-800/50 gap-2">
+                <Search size={20} className="text-zinc-700" />
+                <p className="text-zinc-600 text-xs font-mono uppercase tracking-widest">Nenhum edital encontrado para "<span className="text-zinc-400">{busca}</span>"</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -836,40 +914,76 @@ export default function Dashboard() {
                       key={edital.id}
                       onMouseEnter={() => playHover()}
                       onClick={() => { playClick(); setEditalAtivo(edital); setBuscaItens(''); }}
-                      className={`flex flex-col group card-premium relative cursor-pointer border-2 transition-colors ${participando ? 'bg-emerald-950/10 border-emerald-900/60 hover:border-emerald-500/80' : 'bg-[#12141d] border-zinc-800 hover:border-zinc-600'}`}
+                      style={participando
+                        ? { boxShadow: '0 0 0 1px rgba(16,185,129,0.15), 0 4px 24px rgba(16,185,129,0.06)' }
+                        : undefined}
+                      className={`flex flex-col group card-premium relative cursor-pointer border-2 transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(220,38,38,0.2),0_4px_32px_rgba(220,38,38,0.08)] ${participando ? 'bg-emerald-950/10 border-emerald-900/60 hover:border-emerald-500' : 'bg-[#12141d] border-zinc-800 hover:border-red-900/60'}`}
                     >
-                      <div className={`h-1 w-full transition-colors ${participando ? 'bg-emerald-600' : 'bg-zinc-800 group-hover:bg-red-600'}`}></div>
-                      <div className="p-5 flex flex-col h-full relative">
-                        <div className="flex justify-between items-start mb-4">
-                          <span className="text-xs font-bold font-mono px-2 py-0.5 bg-black border border-zinc-700 text-zinc-400">{edital.numero}</span>
-                          <span className={`text-xs font-mono px-2 py-0.5 border ${tempo.cor}`}>{tempo.txt}</span>
-                        </div>
-                        <h3 className={`font-bold text-base mb-1 line-clamp-2 leading-snug transition-colors ${participando ? 'text-emerald-300 group-hover:text-emerald-200' : 'text-zinc-100 group-hover:text-red-400'}`}>{edital.orgao}</h3>
-                        <p className={`text-zinc-500 text-xs font-mono mb-4 border-l-2 pl-2 py-0.5 transition-colors ${participando ? 'border-emerald-800' : 'border-zinc-700'}`}>
-                          UASG: {edital.uasg || '—'}
-                        </p>
+                      {/* Barra de acento superior */}
+                      <div className={`h-0.5 w-full transition-all duration-300 ${participando ? 'bg-emerald-500' : 'bg-transparent group-hover:bg-red-600'}`} />
 
-                        {pct !== null && (
+                      <div className="p-5 flex flex-col h-full relative">
+                        {/* Header: número + timer */}
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-[10px] font-bold font-mono px-2 py-0.5 bg-black border border-zinc-800 text-zinc-500 tracking-widest">Nº {edital.numero}</span>
+                          <span className={`text-[10px] font-mono px-2 py-0.5 border ${tempo.cor}`}>{tempo.txt}</span>
+                        </div>
+
+                        {/* Órgão */}
+                        <h3 className={`font-bold text-sm mb-1 line-clamp-2 leading-snug transition-colors ${participando ? 'text-emerald-300 group-hover:text-emerald-200' : 'text-zinc-100 group-hover:text-red-400'}`}>
+                          {edital.orgao}
+                        </h3>
+
+                        {/* Objeto — descrição do que está sendo comprado */}
+                        {edital.objeto ? (
+                          <p className="text-zinc-600 text-[10px] font-mono mb-3 line-clamp-2 leading-relaxed italic">
+                            {edital.objeto}
+                          </p>
+                        ) : (
+                          <p className="text-zinc-700 text-[10px] font-mono mb-3 tracking-widest">UASG: {edital.uasg || '—'}</p>
+                        )}
+
+                        {/* Progresso de cotação — sempre visível */}
+                        {prog && (
                           <div className="mb-4">
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-xs text-zinc-500">{prog.cotados}/{prog.total} itens cotados</span>
-                              <span className={`text-xs font-bold ${pct === 100 ? 'text-emerald-400' : 'text-zinc-400'}`}>{pct}%</span>
+                            <div className="flex justify-between items-center mb-1.5">
+                              <span className="text-[10px] text-zinc-600 font-mono uppercase tracking-wider">
+                                {pct === 100 ? '✓ Cotação completa' : `${prog.cotados} de ${prog.total} itens cotados`}
+                              </span>
+                              <span className={`text-[10px] font-bold tabular-nums ${pct === 100 ? 'text-emerald-400' : pct! > 0 ? 'text-red-400' : 'text-zinc-700'}`}>
+                                {pct ?? 0}%
+                              </span>
                             </div>
-                            <div className="w-full h-1.5 bg-black border border-zinc-800">
-                              <div className={`h-full transition-all duration-500 ${pct === 100 ? 'bg-emerald-500' : 'bg-red-600'}`} style={{ width: `${pct}%` }} />
+                            <div className="w-full h-1 bg-zinc-900 border border-zinc-800/50">
+                              <div
+                                className={`h-full transition-all duration-700 ${pct === 100 ? 'bg-emerald-500' : 'bg-red-600'}`}
+                                style={{ width: `${pct ?? 0}%` }}
+                              />
                             </div>
                           </div>
                         )}
 
+                        {/* Tags de alerta */}
+                        {edital.tags && edital.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {edital.tags.map((tag: string) => (
+                              <span key={tag} className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 bg-red-950/40 border border-red-900/50 text-red-400">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Botão participar + avatares */}
                         <div className="mb-4 flex items-center gap-2">
                           <button
                             onMouseEnter={(e) => { e.stopPropagation(); playHover(); }}
                             onClick={(e) => { e.stopPropagation(); handleParticipar(edital); }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase border transition-all ${participando
-                              ? 'bg-emerald-950/40 border-emerald-600 text-emerald-400 hover:bg-emerald-950/80'
-                              : 'bg-black border-zinc-700 text-zinc-500 hover:border-red-500 hover:text-red-400'}`}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border transition-all ${participando
+                              ? 'bg-emerald-950/40 border-emerald-700 text-emerald-400 hover:bg-emerald-950/80'
+                              : 'bg-black border-zinc-800 text-zinc-500 hover:border-red-600 hover:text-red-400'}`}
                           >
-                            <Crosshair size={11} />
+                            <Crosshair size={10} />
                             {participando ? 'Participando' : 'Participar'}
                           </button>
                           {listaParticipantes.length > 0 && (
@@ -888,12 +1002,12 @@ export default function Dashboard() {
                           )}
                         </div>
 
-                        <div className="mt-auto pt-3 border-t border-zinc-800/50 flex items-center gap-3">
-                          <Calendar size={13} className={`shrink-0 ${participando ? 'text-emerald-600' : 'text-zinc-600'}`} />
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-zinc-600 text-[11px] font-medium uppercase">Abertura</span>
-                            <span className={`font-mono text-xs transition-colors truncate ${participando ? 'text-emerald-400' : 'text-zinc-300'}`}>{edital.data_pregao}</span>
-                          </div>
+                        {/* Footer: data de abertura */}
+                        <div className="mt-auto pt-3 border-t border-zinc-800/40 flex items-center gap-2">
+                          <Calendar size={11} className={`shrink-0 ${participando ? 'text-emerald-700' : 'text-zinc-700'}`} />
+                          <span className={`font-mono text-[10px] transition-colors ${participando ? 'text-emerald-500' : 'text-zinc-500'}`}>
+                            {edital.data_pregao}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -943,7 +1057,7 @@ export default function Dashboard() {
               </div>
 
               <div className="flex space-x-2 w-fit mb-[-2px] relative z-20">
-                {['resumo', 'itens', 'documentos'].map((aba) => (
+                {['resumo', 'itens', 'documentos', 'obs', 'guerra'].map((aba) => (
                   <button
                     key={aba} onMouseEnter={() => playHover()} onClick={() => { playClick(); setAbaAtiva(aba); }}
                     className={`px-6 py-2.5 text-xs font-bold uppercase tracking-widest transition-all duration-200 border-t-2 border-l-2 border-r-2 ${abaAtiva === aba ? 'bg-[#0c0d12] text-red-500 border-red-600' : 'bg-black text-zinc-600 border-zinc-800 hover:text-zinc-300 hover:border-zinc-600'}`}
@@ -1145,6 +1259,199 @@ export default function Dashboard() {
                   )}
                 </div>
               )}
+
+              {/* ---- ABA OBSERVAÇÕES ---- */}
+              {abaAtiva === 'obs' && (
+                <div className="bg-[#12141d] border border-zinc-800 aba-animada p-6 space-y-6">
+                  {/* Tags rápidas */}
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Alertas Rápidos</p>
+                    <div className="flex flex-wrap gap-2">
+                      {TAGS_DISPONIVEIS.map(tag => (
+                        <button
+                          key={tag}
+                          onMouseEnter={() => playHover()}
+                          onClick={() => toggleTag(tag)}
+                          className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                            obsTags.includes(tag)
+                              ? 'bg-red-600 border-red-500 text-white'
+                              : 'bg-black border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Textarea de observações */}
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Observações Livres</p>
+                    <textarea
+                      value={obsTexto}
+                      onChange={e => setObsTexto(e.target.value)}
+                      placeholder="Anote exigências, alertas, detalhes do edital..."
+                      rows={8}
+                      className="w-full bg-black border border-zinc-800 text-zinc-300 text-sm font-mono p-4 resize-none focus:outline-none focus:border-red-600 placeholder:text-zinc-700"
+                    />
+                  </div>
+
+                  <button
+                    onMouseEnter={() => playHover()}
+                    onClick={handleSalvarObs}
+                    disabled={obsSalvando}
+                    className="px-6 py-2.5 text-xs font-bold uppercase tracking-widest bg-red-600 hover:bg-red-500 text-white border border-red-500 transition-all disabled:opacity-50"
+                  >
+                    {obsSalvando ? 'Salvando...' : 'Salvar Observações'}
+                  </button>
+                </div>
+              )}
+
+              {/* ---- ABA SALA DE GUERRA ---- */}
+              {abaAtiva === 'guerra' && (() => {
+                const itensAtivos = itens.filter(i => i.ignorado !== 1 && i.lance_minimo > 0);
+
+                function registrarLance(item: any) {
+                  const concorrenteStr = lanceConcorrente[item.id] || '';
+                  const concorrente = parseFloat(concorrenteStr.replace(',', '.'));
+                  if (isNaN(concorrente) || concorrente <= 0) return;
+
+                  const meuMinimo = item.lance_minimo;
+                  const ideal = concorrente - 0.01;
+                  let status: 'vantagem' | 'limite' | 'prejuizo';
+
+                  if (concorrente < meuMinimo) {
+                    status = 'prejuizo';
+                    playAlert();
+                  } else if (ideal <= meuMinimo) {
+                    status = 'limite';
+                    playAlert();
+                  } else {
+                    status = 'vantagem';
+                    playSuccess();
+                  }
+
+                  const agora = new Date();
+                  const ts = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                  setHistoricoLances(prev => [{ itemNome: item.nome.slice(0, 50), concorrente, ideal: status === 'prejuizo' ? null : ideal, status, ts }, ...prev].slice(0, 50));
+                }
+
+                return (
+                  <div className="aba-animada space-y-4">
+                    {/* Header da sessão */}
+                    <div className="bg-black border border-red-900/40 p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-xs font-bold uppercase tracking-widest text-red-400">Sala de Guerra — Sessão Ativa</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-500">
+                        Início: {sessaoInicio.toLocaleTimeString('pt-BR')}
+                      </span>
+                    </div>
+
+                    {itensAtivos.length === 0 ? (
+                      <div className="bg-[#12141d] border border-zinc-800 p-12 text-center">
+                        <p className="text-zinc-500 text-sm font-mono uppercase">Cote os itens primeiro para ativar a Sala de Guerra.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Tabela de batalha */}
+                        <div className="bg-[#12141d] border border-zinc-800 overflow-hidden">
+                          <div className="grid grid-cols-[1fr_120px_120px_140px_120px] text-[9px] font-bold uppercase tracking-widest text-zinc-600 border-b border-zinc-800 bg-black/60">
+                            <div className="px-4 py-3">Item</div>
+                            <div className="px-4 py-3 text-right">Teto Gov.</div>
+                            <div className="px-4 py-3 text-right">Meu Mínimo</div>
+                            <div className="px-4 py-3 text-center">Lance Concorrente</div>
+                            <div className="px-4 py-3 text-right">Meu Lance Ideal</div>
+                          </div>
+                          {itensAtivos.map(item => {
+                            const concorrenteStr = lanceConcorrente[item.id] || '';
+                            const concorrente = parseFloat(concorrenteStr.replace(',', '.'));
+                            const meuMinimo = item.lance_minimo;
+                            const temConcorrente = !isNaN(concorrente) && concorrente > 0;
+                            const ideal = temConcorrente ? concorrente - 0.01 : null;
+                            const isPrejuizo = temConcorrente && concorrente < meuMinimo;
+                            const isLimite = temConcorrente && ideal !== null && ideal <= meuMinimo && !isPrejuizo;
+                            const isVantagem = temConcorrente && !isPrejuizo && !isLimite;
+
+                            return (
+                              <div key={item.id} className={`grid grid-cols-[1fr_120px_120px_140px_120px] border-b border-zinc-800/50 transition-colors ${isPrejuizo ? 'bg-red-950/20' : ''}`}>
+                                <div className="px-4 py-3 text-xs text-zinc-300 font-mono line-clamp-2 self-center">{item.nome}</div>
+                                <div className="px-4 py-3 text-right text-xs font-mono text-zinc-500 self-center">R$ {item.preco_alvo?.toFixed(2)}</div>
+                                <div className="px-4 py-3 text-right text-xs font-mono text-zinc-400 self-center font-bold">R$ {meuMinimo?.toFixed(2)}</div>
+                                <div className="px-4 py-3 flex items-center gap-2 justify-center self-center">
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder="0,00"
+                                    value={concorrenteStr}
+                                    onChange={e => setLanceConcorrente(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                    onKeyDown={e => { if (e.key === 'Enter') { playClick(); registrarLance(item); } }}
+                                    className={`w-24 text-center text-xs font-mono font-bold bg-black border px-2 py-1.5 focus:outline-none transition-colors ${isPrejuizo ? 'border-red-500 text-red-400' : isLimite ? 'border-amber-600 text-amber-400' : 'border-zinc-700 text-zinc-200 focus:border-red-600'}`}
+                                  />
+                                  <button
+                                    onMouseEnter={() => playHover()}
+                                    onClick={() => { playClick(); registrarLance(item); }}
+                                    className="text-[9px] font-bold uppercase px-2 py-1.5 bg-zinc-900 border border-zinc-700 text-zinc-400 hover:border-red-600 hover:text-red-400 transition-all"
+                                  >
+                                    LOG
+                                  </button>
+                                </div>
+                                <div className="px-4 py-3 text-right self-center">
+                                  {!temConcorrente ? (
+                                    <span className="text-zinc-700 text-xs font-mono">—</span>
+                                  ) : isPrejuizo ? (
+                                    <div>
+                                      <span className="text-[9px] font-bold uppercase tracking-widest text-red-500 block">⚠ PREJUÍZO</span>
+                                      <span className="text-[9px] text-red-700 font-mono">abaixo do custo</span>
+                                    </div>
+                                  ) : isLimite ? (
+                                    <div>
+                                      <span className="text-xs font-bold font-mono text-amber-400 block">R$ {meuMinimo.toFixed(2)}</span>
+                                      <span className="text-[9px] uppercase tracking-widest text-amber-600">no limite</span>
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <span className="text-xs font-bold font-mono text-emerald-400 block">R$ {ideal!.toFixed(2)}</span>
+                                      <span className="text-[9px] uppercase tracking-widest text-emerald-700">vantagem</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Histórico de lances */}
+                        {historicoLances.length > 0 && (
+                          <div className="bg-[#12141d] border border-zinc-800">
+                            <div className="px-4 py-3 border-b border-zinc-800 bg-black/60 flex items-center justify-between">
+                              <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Log da Sessão</span>
+                              <button onMouseEnter={() => playHover()} onClick={() => { playClick(); setHistoricoLances([]); }} className="text-[9px] uppercase text-zinc-700 hover:text-red-500 transition-colors">Limpar</button>
+                            </div>
+                            <div className="divide-y divide-zinc-900 max-h-48 overflow-y-auto">
+                              {historicoLances.map((log, i) => (
+                                <div key={i} className="px-4 py-2 flex items-center gap-4 font-mono text-[10px]">
+                                  <span className="text-zinc-600 shrink-0">{log.ts}</span>
+                                  <span className="text-zinc-400 flex-1 truncate">{log.itemNome}</span>
+                                  <span className="text-zinc-500 shrink-0">concorr: <span className="text-zinc-300">R$ {log.concorrente.toFixed(2)}</span></span>
+                                  {log.status === 'prejuizo' ? (
+                                    <span className="text-red-500 font-bold shrink-0">PREJUÍZO</span>
+                                  ) : (
+                                    <span className={`shrink-0 font-bold ${log.status === 'vantagem' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                      ideal: R$ {log.ideal?.toFixed(2)}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

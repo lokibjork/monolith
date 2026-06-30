@@ -1,5 +1,5 @@
 import { useEffect, useState, createContext, useContext, ReactNode } from 'react';
-import { X, Crosshair, DollarSign } from 'lucide-react';
+import { X, Crosshair } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from './Avatar';
@@ -67,26 +67,6 @@ export function NotificacoesProvider({ children }: { children: ReactNode }) {
         });
       })
 
-      // Quando alguém cota um item
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'itens',
-      }, (payload) => {
-        const novo = payload.new as any;
-        if (novo.cotado_por_id === usuario.id) return;
-        if (!novo.cotado_por_nome || !novo.melhor_cotacao) return;
-
-        emitirToast({
-          tipo: 'cotacao',
-          mensagem: `cotou R$ ${Number(novo.melhor_cotacao).toFixed(2)}`,
-          edital: novo.nome?.slice(0, 40),
-          agente: {
-            nome: novo.cotado_por_nome,
-            cor: novo.cotado_por_cor || '#dc2626',
-            avatar_url: null,
-          },
-        });
-      })
-
       .subscribe();
 
     return () => { supabase.removeChannel(canal); };
@@ -106,10 +86,7 @@ export function NotificacoesProvider({ children }: { children: ReactNode }) {
             <Avatar nome={t.agente.nome} cor={t.agente.cor} avatar_url={t.agente.avatar_url} size="sm" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 mb-0.5">
-                {t.tipo === 'participacao'
-                  ? <Crosshair size={10} className="text-red-500 shrink-0" />
-                  : <DollarSign size={10} className="text-emerald-500 shrink-0" />
-                }
+                <Crosshair size={10} className="text-red-500 shrink-0" />
                 <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest truncate">
                   {t.agente.nome}
                 </span>

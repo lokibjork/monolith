@@ -29,23 +29,23 @@
 }
 
 .light {
-  --c-bg:          #f8fafc;
-  --c-surface:     #ffffff;
+  --c-bg:          #f5f5f4;   /* off-white levemente quente, não azulado */
+  --c-surface:     #fafaf9;
   --c-card:        #ffffff;
-  --c-card-hover:  #f1f5f9;
+  --c-card-hover:  #f5f5f4;
   --c-elevated:    #ffffff;
-  --c-border:      #e2e8f0;
-  --c-border-md:   #cbd5e1;
-  --c-border-sub:  #f1f5f9;
+  --c-border:      #e7e5e4;
+  --c-border-md:   #d6d3d1;
+  --c-border-sub:  #f0efee;
 
-  --c-text-1:      #0f172a;
-  --c-text-2:      #475569;
-  --c-text-3:      #94a3b8;
+  --c-text-1:      #1c1917;   /* quase preto, muito legível */
+  --c-text-2:      #44403c;   /* cinza escuro, alto contraste */
+  --c-text-3:      #78716c;   /* muted, mas ainda legível */
 
-  --c-input-bg:    #f8fafc;
-  --c-input-text:  #0f172a;
+  --c-input-bg:    #ffffff;
+  --c-input-text:  #1c1917;
 
-  --c-overlay:     rgba(15, 23, 42, 0.6);
+  --c-overlay:     rgba(15, 15, 15, 0.5);
 
   color-scheme: light;
 }
@@ -56,15 +56,22 @@
 * { box-sizing: border-box; }
 
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Plus Jakarta Sans', Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 24px;
-  font-weight: 400;
+  font-weight: 450;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+}
+
+/* JetBrains Mono para todos os elementos mono/código */
+.font-mono, code, pre, kbd,
+[class*="font-mono"] {
+  font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+  font-weight: 500 !important;
 }
 
 body, #root {
@@ -78,63 +85,96 @@ a { font-weight: 500; color: #dc2626; text-decoration: inherit; }
 a:hover { color: #ef4444; }
 
 /* ============================================================
-   OVERRIDES LIGHT MODE — classes Tailwind que precisam inverter
+   OVERRIDES LIGHT MODE — completo e acessível
    ============================================================ */
 
-/* Textos */
+/* --- PESO E TAMANHO DE FONTE (acessibilidade — vale nos dois modos) --- */
+
+/* Fontes pequenas ganham peso extra para não desaparecer */
+.text-\[9px\]  { font-size: 11px !important; font-weight: 700 !important; }
+.text-\[10px\] { font-size: 12px !important; font-weight: 600 !important; }
+.text-\[11px\] { font-size: 12px !important; font-weight: 600 !important; }
+.text-xs       { font-size: 13px !important; font-weight: 500 !important; line-height: 1.5 !important; }
+.text-sm       { font-size: 14px !important; font-weight: 450 !important; line-height: 1.5 !important; }
+
+/* Overrides adicionais para o light (maior contraste) */
+.light .text-xs { font-weight: 600 !important; }
+.light .text-sm { font-weight: 500 !important; }
+
+/* --- TEXTOS — alto contraste --- */
 .light .text-zinc-100,
 .light .text-zinc-200  { color: #0f172a !important; }
 .light .text-zinc-300  { color: #1e293b !important; }
-.light .text-zinc-400  { color: #334155 !important; }
-.light .text-zinc-500  { color: #475569 !important; }
-.light .text-zinc-600  { color: #64748b !important; }
-.light .text-zinc-700  { color: #94a3b8 !important; }
+.light .text-zinc-400  { color: #374151 !important; }
+.light .text-zinc-500  { color: #4b5563 !important; }
+.light .text-zinc-600  { color: #6b7280 !important; }
+.light .text-zinc-700  { color: #9ca3af !important; }
 
-/* Fundos */
-.light .bg-black        { background-color: #f8fafc !important; }
-.light .bg-black\/50    { background-color: rgba(248,250,252,0.8) !important; }
-.light .bg-black\/30    { background-color: rgba(241,245,249,0.6) !important; }
-.light .bg-zinc-900     { background-color: #f1f5f9 !important; }
-.light .bg-zinc-900\/50 { background-color: rgba(241,245,249,0.5) !important; }
-.light .bg-zinc-800     { background-color: #e2e8f0 !important; }
+/* --- FUNDOS --- */
+.light .bg-black,
+.light [class*="bg-black"]        { background-color: #ffffff !important; }
+.light .bg-zinc-950               { background-color: #f8fafc !important; }
+.light .bg-zinc-900               { background-color: #f1f5f9 !important; }
+.light .bg-zinc-900\/50           { background-color: rgba(241,245,249,0.7) !important; }
+.light .bg-zinc-800               { background-color: #e5e7eb !important; }
+.light .bg-zinc-800\/60           { background-color: rgba(229,231,235,0.8) !important; }
 
-/* Bordas */
-.light .border-zinc-900  { border-color: #f1f5f9 !important; }
-.light .border-zinc-800  { border-color: #e2e8f0 !important; }
-.light .border-zinc-700  { border-color: #cbd5e1 !important; }
+/* Backgrounds hexadecimais hardcoded */
+.light [class*="bg-[#050508]"],
+.light [class*="bg-[#090a0f]"],
+.light [class*="bg-[#0c0d12]"],
+.light [class*="bg-[#0c1020]"],
+.light [class*="bg-[#0f1829]"]    { background-color: #f1f5f9 !important; }
+.light [class*="bg-[#12141d]"],
+.light [class*="bg-[#1a2235]"]    { background-color: #ffffff !important; }
+.light [class*="bg-[#111827]"]    { background-color: #f8fafc !important; }
 
-/* Placeholder */
+/* --- BORDAS --- */
+.light .border-zinc-900           { border-color: #f1f5f9 !important; }
+.light .border-zinc-800,
+.light .border-zinc-800\/50       { border-color: #e5e7eb !important; }
+.light .border-zinc-700           { border-color: #d1d5db !important; }
+.light .border-zinc-600           { border-color: #9ca3af !important; }
+
+/* --- INPUTS --- */
+.light input, .light textarea, .light select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #d1d5db !important;
+}
 .light input::placeholder,
-.light textarea::placeholder { color: #94a3b8 !important; }
+.light textarea::placeholder { color: #9ca3af !important; }
 
-/* Hover de linhas de tabela */
+/* --- TABELA --- */
 .light tbody tr:hover {
   background-color: rgba(220, 38, 38, 0.04) !important;
 }
 
-/* Overlay de modais */
+/* --- OVERLAY / MODAIS --- */
 .light .overlay-glass {
-  background: rgba(15, 23, 42, 0.55) !important;
+  background: rgba(15, 23, 42, 0.5) !important;
 }
 
-/* Backgrounds customizados hardcoded no Dashboard / Vault / modais */
-.light [class*="bg-[#090a0f]"],
-.light [class*="bg-[#0c0d12]"],
-.light [class*="bg-[#0c1020]"]  { background-color: #f1f5f9 !important; }
-.light [class*="bg-[#12141d]"]  { background-color: #ffffff !important; }
-.light [class*="bg-[#111827]"]  { background-color: #f8fafc !important; }
+/* --- CARDS --- */
+.light .card-premium {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.05) !important;
+  background-color: #ffffff !important;
+}
+.light .card-premium:hover {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1), 0 0 0 1px rgba(220,38,38,0.2) !important;
+  transform: translateY(-1px) !important;
+}
 
-/* bg-black no modo light vira superfície limpa */
-.light .bg-black { background-color: #ffffff !important; }
-.light [class*="bg-black\/50"] { background-color: rgba(248,250,252,0.85) !important; }
-.light [class*="bg-black\/30"] { background-color: rgba(241,245,249,0.6) !important; }
-
-/* Skeleton */
+/* --- SKELETON --- */
 .light .skeleton-loading { animation: skeletonPulseLight 1.5s infinite ease-in-out; }
 @keyframes skeletonPulseLight {
-  0%, 100% { opacity: 0.6; background-color: #e2e8f0; }
+  0%, 100% { opacity: 0.6; background-color: #e5e7eb; }
   50%       { opacity: 1;   background-color: #f1f5f9; }
 }
+
+/* --- SCROLLBAR no light --- */
+.light ::-webkit-scrollbar-thumb { background: #d1d5db; }
+.light ::-webkit-scrollbar-thumb:hover { background: #dc2626; }
 
 /* ============================================================
    IMPRESSÃO — FALLBACK (o PDF usa window.open com janela isolada)

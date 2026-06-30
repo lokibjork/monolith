@@ -7,9 +7,9 @@ import { supabase } from './supabase';
 const UF = 'SP';
 const MUNICIPIO_IBGE = 3550308;   // São Paulo capital (código IBGE)
 const MUNICIPIO_NOME = 'São Paulo'; // Validação no detalhe do edital
-const MODALIDADE = 8;              // Dispensa Eletrônica
+// 6 = Pregão Eletrônico, 8 = Dispensa Eletrônica
+const MODALIDADES = [6, 8];
 const JANELA_DIAS_FUTURO = 60;     // Busca propostas abertas até 60 dias à frente
-const PALAVRAS_CHAVE = ['informática', 'informatica'];
 
 // ============================================================
 // UTILITÁRIOS
@@ -51,13 +51,6 @@ function normalizar(texto: string): string {
   return (texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-function temPalavraChave(texto: string): boolean {
-  const t = normalizar(texto);
-  return PALAVRAS_CHAVE.some(p => t.includes(normalizar(p)));
-}
-
-
-
 function dataISOParaYYYYMMDD(d: Date): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -66,10 +59,13 @@ function dataISOParaYYYYMMDD(d: Date): string {
 // LIMPEZA DE EDITAIS EXPIRADOS
 // ============================================================
 export async function limparEditaisExpirados(): Promise<number> {
+  // Só remove editais importados automaticamente (manual = false ou null).
+  // Editais marcados como manual = true nunca são deletados pelo robô.
   const { data } = await supabase
     .from('editais')
-    .select('id, data_pregao, status')
-    .neq('status', 'participando');
+    .select('id, data_pregao, status, manual')
+    .neq('status', 'participando')
+    .neq('manual', true);   // protege editais manuais
 
   if (!data || data.length === 0) return 0;
 
@@ -86,13 +82,11 @@ export async function limparEditaisExpirados(): Promise<number> {
 // ============================================================
 // BUSCA DE EDITAIS (endpoint "proposta" = recebendo proposta agora)
 // ============================================================
-async function buscarPaginaEditais(dataInicial: string, dataFinal: string, pagina: number): Promise<any[]> {
-  // /contratacoes/proposta = propostas abertas agora (status=recebendo_proposta)
-  // codigoMunicipio filtra SP capital na API; palavra-chave é validada no cliente.
+async function buscarPaginaEditais(dataInicial: string, dataFinal: string, pagina: number, modalidade: number): Promise<any[]> {
   const url =
     `https://pncp.gov.br/api/consulta/v1/contratacoes/proposta` +
     `?dataInicial=${dataInicial}&dataFinal=${dataFinal}` +
-    `&codigoModalidadeContratacao=${MODALIDADE}` +
+    `&codigoModalidadeContratacao=${modalidade}` +
     `&uf=${UF}` +
     `&codigoMunicipio=${MUNICIPIO_IBGE}` +
     `&pagina=${pagina}&tamanhoPagina=50`;
@@ -131,7 +125,9 @@ async function importarEdital(item: any, onStatus: (msg: string) => void): Promi
   if (!cnpj || !seq) return false;
 
   // Link oficial como chave de deduplicação primária (única por edital)
-  const linkOficial = `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${seq}`;
+  // Normaliza seq para remover zeros à esquerda e evitar duplicatas por formato
+  const seqNorm = String(parseInt(seq, 10));
+  const linkOficial = `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${seqNorm}`;
 
   const { data: existente } = await supabase
     .from('editais')
@@ -182,8 +178,9 @@ async function importarEdital(item: any, onStatus: (msg: string) => void): Promi
   const listaArquivos = resArquivos.ok ? extrairMaiorArray(await resArquivos.json()) : [];
 
   // Monta campos do edital
-  const numero = dataEdital.numeroCompra || item.numeroCompra || `${seq}/${ano}`;
+  const numero = dataEdital.numeroCompra || item.numeroCompra || `${seqNorm}/${ano}`;
   const orgao = dataEdital.orgaoEntidade?.razaoSocial || orgaoNome;
+  const objeto = dataEdital.objetoCompra || item.objetoCompra || item.objeto || '';
   const dataPregao = formatarData(
     dataEdital.dataEncerramentoProposta ||
     dataEdital.dataAberturaProposta ||
@@ -193,7 +190,7 @@ async function importarEdital(item: any, onStatus: (msg: string) => void): Promi
 
   const { data: insertData, error } = await supabase
     .from('editais')
-    .insert({ numero, orgao, data_pregao: dataPregao, uasg: cnpj, link_oficial: linkOficial, status: 'ativo' })
+    .insert({ numero, orgao, objeto, data_pregao: dataPregao, uasg: cnpj, link_oficial: linkOficial, status: 'ativo' })
     .select();
 
   if (error || !insertData) return false;
@@ -250,33 +247,32 @@ export async function sincronizarPNCP(onStatus: (msg: string) => void): Promise<
   const dataInicial = dataISOParaYYYYMMDD(hoje);
   const dataFinal = dataISOParaYYYYMMDD(futuro);
 
-  onStatus(`SCAN // Varrendo propostas abertas em SP [até ${dataFinal}]...`);
+  const NOMES_MODALIDADE: Record<number, string> = { 6: 'Pregão Eletrônico', 8: 'Dispensa Eletrônica' };
 
-  // 3. Percorre páginas
-  let paginaAtual = 1;
+  // 3. Percorre cada modalidade
+  for (const modalidade of MODALIDADES) {
+    const nomeModal = NOMES_MODALIDADE[modalidade] || `Modalidade ${modalidade}`;
+    onStatus(`SCAN // Varrendo ${nomeModal} em SP [até ${dataFinal}]...`);
 
-  while (true) {
-    const itens = await buscarPaginaEditais(dataInicial, dataFinal, paginaAtual);
-    if (itens.length === 0) break;
+    let paginaAtual = 1;
+    while (true) {
+      const itens = await buscarPaginaEditais(dataInicial, dataFinal, paginaAtual, modalidade);
+      if (itens.length === 0) break;
 
-    // Filtra por palavra-chave no objetoCompra — a API não faz busca semântica
-    const candidatos = itens.filter(i =>
-      temPalavraChave(i.objetoCompra || i.objeto || '')
-    );
+      onStatus(`SCAN // ${nomeModal} — Pág. ${paginaAtual}: ${itens.length} editais`);
 
-    onStatus(`FILTER // Página ${paginaAtual}: ${candidatos.length}/${itens.length} com "informática" no objeto`);
-
-    for (const candidato of candidatos) {
-      try {
-        const importado = await importarEdital(candidato, onStatus);
-        if (importado) resultado.novos++;
-      } catch {
-        resultado.erros++;
+      for (const candidato of itens) {
+        try {
+          const importado = await importarEdital(candidato, onStatus);
+          if (importado) resultado.novos++;
+        } catch {
+          resultado.erros++;
+        }
       }
-    }
 
-    if (itens.length < 50) break;
-    paginaAtual++;
+      if (itens.length < 50) break;
+      paginaAtual++;
+    }
   }
 
   return resultado;
