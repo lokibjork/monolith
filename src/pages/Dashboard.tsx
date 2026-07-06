@@ -671,17 +671,35 @@ export default function Dashboard() {
     e.preventDefault(); playClick(); setStatusRobo('scraping');
     try {
       setMensagemRobo('Verificando link PNCP...');
-      const match = linkRobo.match(/editais\/(\d{14})\/(\d{4})\/(\d+)/);
-      if (!match) throw new Error("Link inválido. Use o formato oficial do portal PNCP.");
-      const cnpj = match[1]; const ano = match[2]; const seq = match[3];
+
+      // Aceita URLs com ou sem zeros à esquerda no seq, com ou sem trailing slash/params
+      const linkLimpo = linkRobo.trim().split('?')[0].split('#')[0].replace(/\/+$/, '');
+      const match = linkLimpo.match(/editais\/(\d{14})\/(\d{4})\/(\d+)/);
+      if (!match) throw new Error("Link inválido. Formato esperado: pncp.gov.br/app/editais/CNPJ/ANO/SEQ");
+      const cnpj = match[1];
+      const ano = match[2];
+      const seq = String(parseInt(match[3], 10)); // normaliza zeros à esquerda
+      const linkOficial = `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${seq}`;
+
+      // Se já existe pelo link_oficial (importado antes), apenas marca como manual e reabre
+      const { data: jaExiste } = await supabase.from('editais').select('id').eq('link_oficial', linkOficial).maybeSingle();
+      if (jaExiste) {
+        await supabase.from('editais').update({ manual: true }).eq('id', jaExiste.id);
+        playSuccess();
+        setMensagemRobo('Edital já importado — marcado como manual.');
+        setStatusRobo('sucesso');
+        await carregarEditaisDaNuveem();
+        setTimeout(() => { setIsModalRoboOpen(false); setStatusRobo('idle'); setLinkRobo(''); }, 2000);
+        return;
+      }
 
       setMensagemRobo('Buscando dados do edital...');
       const urlEdital = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
       const resEdital = await fetch(urlEdital, { method: 'GET' });
-      if (!resEdital.ok) throw new Error("Edital não localizado no PNCP.");
+      if (!resEdital.ok) throw new Error(`PNCP retornou ${resEdital.status}. Verifique o link e tente novamente.`);
       const dataEdital = await resEdital.json();
 
-      setMensagemRobo('Baixando itens (pode ter múltiplas páginas)...');
+      setMensagemRobo('Baixando itens...');
       let paginaAtual = 1;
       let todosItens: any[] = [];
 
@@ -689,8 +707,7 @@ export default function Dashboard() {
         const urlItens = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens?pagina=${paginaAtual}&tamanhoPagina=500`;
         const resItens = await fetch(urlItens, { method: 'GET' });
         if (!resItens.ok) break;
-        const dataItensRaw = await resItens.json();
-        const itensDaPagina = extrairMaiorArray(dataItensRaw);
+        const itensDaPagina = extrairMaiorArray(await resItens.json());
         if (itensDaPagina.length === 0) break;
         todosItens = [...todosItens, ...itensDaPagina];
         setMensagemRobo(`Página ${paginaAtual} — ${todosItens.length} itens extraídos...`);
@@ -701,43 +718,38 @@ export default function Dashboard() {
       setMensagemRobo('Baixando documentos (PDFs)...');
       const urlArquivos = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/arquivos`;
       const resArquivos = await fetch(urlArquivos, { method: 'GET' });
-      const dataArquivos = resArquivos.ok ? await resArquivos.json() : {};
-      const listaDeArquivos = extrairMaiorArray(dataArquivos);
+      const listaDeArquivos = resArquivos.ok ? extrairMaiorArray(await resArquivos.json()) : [];
 
       setMensagemRobo('Salvando no banco de dados...');
       const numero = dataEdital.numeroCompra || `${seq}/${ano}`;
       const orgao = dataEdital.orgaoEntidade?.razaoSocial || "Desconhecido";
+      const objeto = dataEdital.objetoCompra || '';
 
+      const dataISO = dataEdital.dataEncerramentoProposta || dataEdital.dataAberturaProposta || '';
       let dataPregao = "Não informada";
-      if (dataEdital.dataAberturaProposta) {
-        const matchDate = dataEdital.dataAberturaProposta.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-        if (matchDate) dataPregao = `${matchDate[3]}/${matchDate[2]}/${matchDate[1]} - ${matchDate[4]}:${matchDate[5]}`;
-      }
-      const linkOficialGerado = `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${seq}`;
+      const matchDate = dataISO.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+      if (matchDate) dataPregao = `${matchDate[3]}/${matchDate[2]}/${matchDate[1]} - ${matchDate[4]}:${matchDate[5]}`;
 
-      const { data: existe } = await supabase.from('editais').select('id').eq('numero', numero).eq('uasg', cnpj);
-      let idEdital: number;
+      const { data: insertData, error: errEdital } = await supabase.from('editais').insert({
+        numero, orgao, objeto, data_pregao: dataPregao, uasg: cnpj, link_oficial: linkOficial, manual: true
+      }).select();
+      if (errEdital) throw new Error(`Erro ao salvar: ${errEdital.message}`);
+      const idEdital = insertData[0].id;
 
-      if (existe && existe.length > 0) {
-        idEdital = existe[0].id;
-      } else {
-        const { data: insertData, error: errEdital } = await supabase.from('editais').insert({
-          numero, orgao, data_pregao: dataPregao, uasg: cnpj, link_oficial: linkOficialGerado, manual: true
-        }).select();
-        if (errEdital) throw errEdital;
-        idEdital = insertData[0].id;
-
+      if (todosItens.length > 0) {
         const itensToInsert = todosItens.map(item => ({
-          edital_id: idEdital, nome: item.descricao || item.materialOuServicoNome || "N/A",
-          quantidade: item.quantidade || 1, preco_alvo: item.valorUnitarioEstimado || item.valorEstimado || 0
+          edital_id: idEdital,
+          nome: item.descricao || item.materialOuServicoNome || "N/A",
+          quantidade: item.quantidade || 1,
+          preco_alvo: item.valorUnitarioEstimado || item.valorEstimado || 0
         }));
         await supabase.from('itens').insert(itensToInsert);
-
-        const docsToInsert = listaDeArquivos.map(arquivo => ({
-          edital_id: idEdital, titulo: arquivo.titulo || arquivo.nomeArquivo || "Anexo", link: arquivo.linkArquivo || arquivo.url || ""
-        })).filter(doc => doc.link !== "");
-        if (docsToInsert.length > 0) await supabase.from('documentos').insert(docsToInsert);
       }
+
+      const docsToInsert = listaDeArquivos
+        .map((a: any) => ({ edital_id: idEdital, titulo: a.titulo || a.nomeArquivo || "Anexo", link: a.linkArquivo || a.url || "" }))
+        .filter((d: any) => d.link !== "");
+      if (docsToInsert.length > 0) await supabase.from('documentos').insert(docsToInsert);
 
       playSuccess();
       setMensagemRobo(`Concluído! ${todosItens.length} itens importados.`);
