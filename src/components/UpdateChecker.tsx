@@ -1,39 +1,32 @@
 import { useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
 import { relaunch } from '@tauri-apps/plugin-process';
-import { check } from '@tauri-apps/plugin-updater';
+import { check, Update } from '@tauri-apps/plugin-updater';
 import { Download, RefreshCw, X, Zap } from 'lucide-react';
 
-interface UpdateInfo {
-  version: string;
-  body: string;
-}
-
 export default function UpdateChecker() {
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateObj, setUpdateObj] = useState<Update | null>(null);
   const [instalando, setInstalando] = useState(false);
   const [progresso, setProgresso] = useState(0);
   const [dispensado, setDispensado] = useState(false);
 
   useEffect(() => {
-    // Escuta o evento emitido pelo Rust ao detectar atualização
-    const unlisten = listen<UpdateInfo>('update-available', (event) => {
-      setUpdateInfo(event.payload);
-    });
-
-    return () => { unlisten.then(f => f()); };
+    // Verifica atualização ao iniciar, com delay para não travar o boot
+    const timer = setTimeout(() => {
+      check()
+        .then(update => { if (update?.available) setUpdateObj(update); })
+        .catch(() => {}); // silencia erros de rede
+    }, 8000);
+    return () => clearTimeout(timer);
   }, []);
 
   async function handleInstalar() {
+    if (!updateObj) return;
     setInstalando(true);
     try {
-      const update = await check();
-      if (!update) return;
-
       let baixados = 0;
       let total = 0;
 
-      await update.downloadAndInstall((event) => {
+      await updateObj.downloadAndInstall((event) => {
         if (event.event === 'Started') {
           total = event.data.contentLength ?? 0;
         } else if (event.event === 'Progress') {
@@ -51,7 +44,7 @@ export default function UpdateChecker() {
     }
   }
 
-  if (!updateInfo || dispensado) return null;
+  if (!updateObj || dispensado) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999] w-80 shadow-2xl"
@@ -78,16 +71,15 @@ export default function UpdateChecker() {
       <div className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-mono text-zinc-600 uppercase">Nova versão</span>
-          <span className="text-xs font-black text-emerald-400 font-mono">v{updateInfo.version}</span>
+          <span className="text-xs font-black text-emerald-400 font-mono">v{updateObj.version}</span>
         </div>
 
-        {updateInfo.body && (
+        {updateObj.body && (
           <p className="text-[11px] text-zinc-500 font-mono leading-relaxed border-l-2 border-zinc-800 pl-2">
-            {updateInfo.body}
+            {updateObj.body}
           </p>
         )}
 
-        {/* Barra de progresso */}
         {instalando && (
           <div className="space-y-1">
             <div className="flex justify-between text-[10px] font-mono text-zinc-600">
@@ -95,28 +87,20 @@ export default function UpdateChecker() {
               <span>{progresso}%</span>
             </div>
             <div className="w-full h-1 bg-zinc-900 border border-zinc-800">
-              <div
-                className="h-full bg-red-600 transition-all duration-300"
-                style={{ width: `${progresso}%` }}
-              />
+              <div className="h-full bg-red-600 transition-all duration-300" style={{ width: `${progresso}%` }} />
             </div>
           </div>
         )}
 
-        {/* Botões */}
         {!instalando ? (
           <div className="flex gap-2 pt-1">
-            <button
-              onClick={handleInstalar}
+            <button onClick={handleInstalar}
               className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase tracking-widest text-white transition-all"
-              style={{ background: '#dc2626' }}
-            >
+              style={{ background: '#dc2626' }}>
               <Download size={12} /> Instalar agora
             </button>
-            <button
-              onClick={() => setDispensado(true)}
-              className="px-3 py-2 text-xs font-bold uppercase text-zinc-600 hover:text-zinc-400 transition-colors border border-zinc-800"
-            >
+            <button onClick={() => setDispensado(true)}
+              className="px-3 py-2 text-xs font-bold uppercase text-zinc-600 hover:text-zinc-400 transition-colors border border-zinc-800">
               Depois
             </button>
           </div>
